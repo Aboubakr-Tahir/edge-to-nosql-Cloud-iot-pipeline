@@ -24,20 +24,16 @@ def connect_cassandra(retries=10, delay=10):
     for i in range(retries):
         try:
             print(f"[-] Tentative de connexion à Cassandra ({i+1}/{retries})...")
-            # 1. On se connecte sans spécifier de keyspace d'abord
             session = cluster.connect()
             
-            # 2. On crée le keyspace manuellement s'il n'existe pas
             print("[-] Vérification/Création du Keyspace 'smart_city'...")
             session.execute("""
                 CREATE KEYSPACE IF NOT EXISTS smart_city 
                 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
             """)
             
-            # 3. On bascule sur le keyspace
             session.set_keyspace('smart_city')
             
-            # 4. On s'assure que la table existe
             session.execute("""
                 CREATE TABLE IF NOT EXISTS telemetry (
                     device_id text,
@@ -58,17 +54,14 @@ def connect_cassandra(retries=10, delay=10):
     raise Exception("Impossible d'initialiser Cassandra.")
 
 def main():
-    # Connexion Cassandra
     print("[-] Démarrage de la connexion à Cassandra...")
     session = connect_cassandra()
     
-    # Préparation de la requête (Prepared Statement pour la performance)
     insert_stmt = session.prepare("""
         INSERT INTO telemetry (device_id, timestamp, cpu_usage_percent, ram_available_mb, temperature_c)
         VALUES (?, ?, ?, ?, ?)
     """)
 
-    # Connexion Kafka
     print("[-] Connexion à Kafka...")
     consumer = Consumer(KAFKA_CONF)
     consumer.subscribe([TOPIC])
@@ -77,7 +70,7 @@ def main():
 
     try:
         while True:
-            msg = consumer.poll(1.0) # Attend 1 seconde
+            msg = consumer.poll(1.0) 
 
             if msg is None:
                 continue
@@ -90,13 +83,10 @@ def main():
 
             # --- LOGIQUE DE TRAITEMENT ---
             try:
-                # 1. Parser le JSON
                 data = json.loads(msg.value().decode('utf-8'))
                 
-                # 2. Convertir le timestamp ISO en objet datetime Python
                 ts_obj = datetime.fromisoformat(data['timestamp'].replace('Z', '+00:00'))
 
-                # 3. Insertion dans Cassandra
                 session.execute(insert_stmt, (
                     data['device_id'],
                     ts_obj,

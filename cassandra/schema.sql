@@ -1,4 +1,4 @@
--- Création du Keyspace (L'équivalent d'une Database)
+-- Création du Keyspace 
 CREATE KEYSPACE IF NOT EXISTS smart_city 
 WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
 

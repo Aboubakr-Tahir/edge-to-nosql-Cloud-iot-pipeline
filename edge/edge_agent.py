@@ -6,7 +6,7 @@ from datetime import datetime
 # --- CONFIGURATION ---
 URL = "http://100.82.235.96:9999/content"
 DEVICE_ID = "debian-edge-01"
-SEND_INTERVAL = 0.5  # Envoi toutes les 0.5 secondes (très fluide)
+SEND_INTERVAL = 0.5  
 
 def get_metrics():
     """Récupère les métriques système en temps réel."""
@@ -36,17 +36,15 @@ def main():
 
     try:
         while True:
-            # 1. Génération des données
+            
             payload = get_metrics()
 
-            # 2. Envoi direct en mémoire (bypasse le disque dur lent)
             try:
                 response = requests.post(URL, json=payload, timeout=2)
                 print(f"[+] Envoyé à {payload['timestamp']} | Status: {response.status_code} | CPU: {payload['cpu_usage_percent']}%")
             except requests.exceptions.RequestException as e:
                 print(f"[-] Erreur réseau (le PC principal est-il allumé ?) : {e}")
 
-            # 3. Attente avant le prochain envoi
             time.sleep(SEND_INTERVAL)
 
     except KeyboardInterrupt:
