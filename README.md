@@ -8,63 +8,72 @@
 ![Tailscale](https://img.shields.io/badge/Tailscale-FFFFFF?style=for-the-badge&logo=tailscale&logoColor=383939)
 ![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=for-the-badge&logo=Streamlit&logoColor=white)
 
-## 📌 Overview
-The **Real-Time Edge-to-NoSQL IoT Pipeline** is an end-to-end data engineering architecture designed specifically for Edge Computing. It demonstrates a highly resilient, low-latency stream processing pipeline that securely ingests high-velocity hardware telemetry data from a remote edge device into a robust distributed storage and visualization layer.
+## 🎥 Live Demo
 
-This project serves as a comprehensive Data Engineering portfolio piece, highlighting expertise in zero-trust networking, stream buffering, event-driven architecture, and NoSQL data modeling.
+<video src="https://github.com/user-attachments/assets/b9ccb004-2173-44c8-993e-5db11fe07675" controls="controls" style="max-width: 100%;">
+</video>
+
+*Watch the pipeline in action: The Edge PC (Debian 13) streams telemetry data in real-time, traversing the secure Tailscale VPN to the AWS EC2 environment. The data is instantly processed via Kafka and NiFi, persisted into Cassandra, and visualized on the live Streamlit dashboard!*
+
+## 📌 Overview
+The **Real-Time Edge-to-NoSQL IoT Pipeline** is a fully automated, Cloud-deployed (AWS) data engineering architecture designed specifically for Edge Computing. It demonstrates a highly resilient, low-latency stream processing pipeline that securely ingests high-velocity hardware telemetry data from a remote edge device into a robust distributed storage and visualization layer hosted on an AWS EC2 instance.
+
+This project serves as a comprehensive Data Engineering portfolio piece, highlighting expertise in cloud infrastructure, zero-trust networking, stream buffering, event-driven architecture, NoSQL data modeling, and automated GitOps (CI/CD) pipelines.
 
 ## 🏗️ Architecture
 
-The pipeline processes real-time metrics (CPU usage, RAM availability, and Temperature) at 0.5-second intervals. The data flow is structured as follows:
+![Architecture Diagram](images/architecture.png)
 
-1. **Edge Device (Hardware):** A Debian 13 edge node runs a Python telemetry agent (`edge/edge_agent.py`), capturing hardware metrics and transmitting them as JSON payloads via HTTP POST.
-2. **Secure Network Layer:** **Tailscale VPN** guarantees a secure, zero-trust overlay network between the edge device and the centralized ingestion server.
-3. **Ingestion Layer:** **Apache NiFi** serves as the central data gateway. It receives the HTTP requests, routes the data, validates the schema, and streams the payload to the message broker.
-4. **Streaming/Broker Layer:** **Apache Kafka** (running in KRaft mode) buffers the high-throughput events under the `test-iot` topic, decoupling ingestion from downstream processors.
-5. **Processing & Storage Layer:** A custom Python consumer (`processors/kafka_to_cassandra.py`) retrieves events from Kafka, applies necessary transformations, and continuously persists the time-series data into **Apache Cassandra**. The processor features built-in retry mechanisms to gracefully handle NoSQL cluster cold starts.
-6. **Visualization Layer:** A live **Streamlit** dashboard (`dashboard/dashboard.py`) consumes metrics directly from Kafka to render real-time, animated analytical charts.
+The pipeline processes real-time metrics (CPU usage, RAM availability, and Temperature) at 0.5-second intervals. The entire core infrastructure runs as a containerized stack on an **AWS EC2 instance (`m7i-flex.large`)**, chosen for its Free Tier eligibility and solid performance. The data flow is structured as follows:
+
+1. **Edge Device (Hardware):** A Debian 13 edge node runs a Python telemetry agent (`edge/edge_agent.py`), capturing hardware metrics.
+2. **Secure Network Layer:** **Tailscale VPN** creates a secure, zero-trust tunnel between the edge device and the AWS EC2 instance. Instead of exposing the EC2's public IP, the edge agent sends HTTP POST requests directly to the EC2's internal Tailscale IP (`100.x.x.x`) on port 9999.
+3. **Continuous Deployment (CI/CD):** A fully automated GitOps pipeline using **GitHub Actions** triggers on every push to the `main` branch. It SSHs into the EC2 instance via port 22 (`0.0.0.0/0` in the Security Group) and automatically runs `docker compose up -d --build`.
+4. **Ingestion Layer:** **Apache NiFi** receives the HTTP requests, routes the data, validates the schema, and streams the payload to the message broker.
+5. **Streaming/Broker Layer:** **Apache Kafka** (running in KRaft mode) buffers the high-throughput events under the `test-iot` topic.
+6. **Processing & Storage Layer:** *Note: While the high-level architecture diagram shows a direct line from Kafka to Cassandra, there is a custom Python consumer script (`processors/kafka_to_cassandra.py`) running in a Docker container.* This consumer retrieves events from Kafka, applies necessary transformations, and continuously persists the time-series data into **Apache Cassandra**.
+7. **Visualization Layer:** A live **Streamlit** dashboard (`dashboard/dashboard.py`) consumes metrics directly from Kafka to render real-time, animated analytical charts.
 
 ---
 
 ## 🛠️ Prerequisites
 
-Before running the pipeline, ensure the following are installed and configured on your host machine:
+Ensure the following are installed and configured:
 
-- **Docker** and **Docker Compose**
-- **Python 3.x** (for running the edge agent locally or on the edge device)
-- A **Tailscale** account and client configured on both the edge device and the host machine.
+- An **AWS Account** with an active `m7i-flex.large` EC2 instance.
+- **Docker** and **Docker Compose** installed on the EC2 instance.
+- A **Tailscale** account configured on both the edge device and the EC2 instance.
+- A **GitHub Account** for CI/CD Secrets management.
+- **Python 3.x** installed on the edge device.
 
 ---
 
 ## 🚀 Quick Start / How to Run
 
-Follow these steps to deploy the data pipeline locally:
+Follow these steps to deploy the data pipeline to AWS:
 
-### Step 1: Clone the Repository
-```bash
-git clone https://github.com/your-username/iot-pipeline.git
-cd iot-pipeline
-```
+### Step 1: Configure GitHub Actions (CI/CD)
+The repository uses an automated GitOps pipeline. Navigate to your repository's **Settings > Secrets and variables > Actions** and add the following repository secrets:
+- `EC2_HOST`: The public IP or DNS of your AWS EC2 instance.
+- `EC2_USERNAME`: Usually `ubuntu` or `ec2-user`.
+- `EC2_SSH_KEY`: The private SSH key `.pem` content used to access the instance.
 
-### Step 2: Spin Up the Infrastructure
-Start the entire infrastructure (Kafka, NiFi, Cassandra, Consumer, and Dashboard) using Docker Compose in detached mode:
-```bash
-docker compose up -d --build
-```
-*Note: Cassandra may take a few minutes to complete its initial bootstrap. The custom Python consumer will automatically retry until the database is ready.*
+Once configured, any `push` to the `main` branch will automatically trigger GitHub Actions to SSH into the instance, pull the latest code, and execute `docker compose up -d --build`.
 
-### Step 3: Configure Apache NiFi
-1. Navigate to the NiFi Web UI at [http://localhost:8080/nifi](http://localhost:8080/nifi).
+### Step 2: Configure Apache NiFi on AWS
+1. Navigate to the NiFi Web UI using your EC2's Tailscale IP: `http://<EC2-TAILSCALE-IP>:8080/nifi`.
 2. Default Credentials (unless modified in your `docker-compose.yml`):
    - **Username:** `admin`
    - **Password:** `supersecretpassword123`
 3. Upload the pre-built NiFi flow template:
    - Go to the **Process Group** grid.
-   - Click the **Upload Template** icon and select the `nifi/iot-nifi-template.xml` file from this repository.
+   - Click the **Upload Template** icon and select the `nifi/iot-nifi-template.xml` file.
 4. Drag and drop the instantiated template onto the canvas and start all processors to begin listening for incoming HTTP payloads.
 
-### Step 4: Start the Edge Telemetry Agent
-On your edge device (or locally for testing), start the Python agent to begin data transmission. Make sure to install the requirements first:
+![Apache NiFi Flow](images/nifi.png)
+
+### Step 3: Start the Edge Telemetry Agent
+On your Debian 13 edge device, connect to the Tailscale network and update your `edge_agent.py` script to point to the EC2's Tailscale IP (`100.x.x.x:9999`). 
 ```bash
 # Install dependencies
 pip install -r requirements.txt
@@ -73,15 +82,8 @@ pip install -r requirements.txt
 python3 edge/edge_agent.py
 ```
 
-### Step 5: View the Live Dashboard
-With data flowing securely from the edge to the message broker, open the Streamlit visualization app in your browser:
-[http://localhost:8501](http://localhost:8501)
+### Step 4: View the Live Dashboard
+With data flowing securely from the edge to the AWS-hosted broker, open the Streamlit visualization app in your browser via the Tailscale VPN:
+`http://<EC2-TAILSCALE-IP>:8501`
 
----
-
-## 🗺️ Future Roadmap
-
-While the pipeline currently operates successfully in a local/Dockerized environment, the architecture is designed to scale. Future iterations will include:
-
-- **Cloud Migration (AWS):** Deploying the core infrastructure (`docker-compose` stack) to an **AWS EC2** instance, establishing a true remote connection from the Debian 13 edge device via the Tailscale VPN.
-- **Continuous Deployment (CI/CD):** Implementing fully automated **GitHub Actions** workflows to test, build, and deploy the infrastructure to the AWS EC2 instance upon every `git push`.
+![Streamlit Dashboard](images/dashboard.png)
